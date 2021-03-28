@@ -1,13 +1,15 @@
 -- MP: a Music Player
--- Copyright (C) 2020 by PragmAda Software Engineering.  All rights reserved.
+-- Copyright (C) 2021 by PragmAda Software Engineering.  All rights reserved.
 -- Released under the terms of the BSD 3-Clause license; see https://opensource.org/licenses
 --
+-- 2021-04-01     Adapted to Ada-12 version of PragmARCs
 -- 2020-09-15     Initial version
 --
 with Ada.Containers.Vectors;
 with Ada.Directories;
 with Ada.Exceptions;
 with Ada.Numerics.Discrete_Random;
+with Ada.Strings.Bounded;
 with Ada.Strings.Unbounded;
 
 with Gnoga.Application.Singleton;
@@ -19,13 +21,13 @@ with Gnoga.Gui.View;
 with Gnoga.Gui.Window;
 with Gnoga_File_Selection;
 
-with PragmARC.B_Strings;
 with PragmARC.Persistent_Skip_List_Unbounded;
 
 package body MP.UI is
-   use PragmARC.B_Strings;
+   package B_Strings is new Ada.Strings.Bounded.Generic_Bounded_Length (Max => 400);
+   use B_Strings;
 
-   subtype Path_Name is B_String (Max_Length => 400);
+   subtype Path_Name is Bounded_String;
 
    function Less (Left : Path_Name; Right : Path_Name) return Boolean;
    -- Files in the working directory are < files in subdirectories
@@ -55,7 +57,7 @@ package body MP.UI is
       function Slash_Count (Path : Path_Name) return Natural is
          Result : Natural := 0;
 
-         Path_S : constant String := +Path;
+         Path_S : constant String := To_String (Path);
       begin -- Slash_Count
          All_Chars : for I in Path_S'Range loop
             if Path_S (I) = '/' then
@@ -131,13 +133,12 @@ package body MP.UI is
    procedure Make_Song_List (List : in out Song_Lists.Vector) is
       Position : Natural := 0;
 
-      procedure Add_One (Item : in Path_Name; Continue : out Boolean) is
+      procedure Add_One (Item : in Path_Name) is
          -- Empty;
       begin -- Add_One
-         Continue := True;
          Position := Position + 1;
          List.Append (New_Item => (Position => Position, Path => Item) );
-         Sel.Add_Option (Value => +Item, Text => +Item);
+         Sel.Add_Option (Value => To_String (Item), Text => To_String (Item) );
       end Add_One;
 
       procedure Add_All is new Path_Lists.Iterate (Action => Add_One);
@@ -192,7 +193,7 @@ package body MP.UI is
          Player.Pause;
       end if;
 
-      Path.Assign (From => Sel.Text (Index) );
+      Path := To_Bounded_String (Sel.Text (Index) );
       List.Delete (Item => Path);
       Refresh;
 
@@ -238,7 +239,7 @@ package body MP.UI is
          Player.Pause;
       end if;
 
-      Path.Assign (From => Name);
+      Path := To_Bounded_String (Name);
       List.Insert (Item => Path);
       Refresh;
       UI.Path.Value (Value => "");
@@ -294,7 +295,7 @@ package body MP.UI is
             Current := Song.Element (Index);
             Sel.Selected (Index => Current.Position);
 
-            if Start (+Current.Path) then
+            if Start (To_String (Current.Path) ) then
                Wait_For_End : loop
                   select
                      accept Play;

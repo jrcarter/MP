@@ -256,14 +256,12 @@ package body MP.UI is
       function Start (Song : in String) return Boolean is -- Returns True if Song started; False otherwise
         -- Empty;
       begin -- Start
-      Gnoga.Log("DJ.Start "&Song);
          Player.Media_Source (Source => Song);
          Window.Document.Title (Value => Title & ' ' & Song);
 
          Wait_For_Ready : for I in 1 .. 10 loop
             if Player.Ready_To_Play then
                Player.Play;
-               Gnoga.Log("DJ.Start started "&Song);
 
                return True;
             end if;
@@ -271,7 +269,6 @@ package body MP.UI is
             delay 0.01;
          end loop Wait_For_Ready;
 
-         Gnoga.Log("DJ.Start failed to start "&Song);
          return False;
       end Start;
 

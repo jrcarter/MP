@@ -2,6 +2,7 @@
 -- Copyright (C) 2021 by PragmAda Software Engineering.  All rights reserved.
 -- Released under the terms of the BSD 3-Clause license; see https://opensource.org/licenses
 --
+-- 2021-06-01     Use new Enpty_Options procedure from Gnoga 1.6a to clear Sel
 -- 2021-04-01     Adapted to Ada-12 version of PragmARCs
 -- 2020-09-15     Initial version
 --
@@ -169,10 +170,7 @@ package body MP.UI is
    procedure Refresh is
       -- Empty;
    begin -- Refresh
-      Clear_Sel : for I in reverse 1 .. Sel.Length loop
-         Sel.Remove_Option (I);
-      end loop Clear_Sel;
-
+      Sel.Empty_Options;
       Make_Song_List (List => Song);
       Count.Value (Value => Sel.Length);
       Shuffle (List => Song);
@@ -252,16 +250,20 @@ package body MP.UI is
       Gnoga.Log (Message => "Add_Song: " & Ada.Exceptions.Exception_Information (E) );
    end Add_Song;
 
+   Title : constant String := "MP";
+
    task body DJ is
       function Start (Song : in String) return Boolean is -- Returns True if Song started; False otherwise
         -- Empty;
       begin -- Start
+      Gnoga.Log("DJ.Start "&Song);
          Player.Media_Source (Source => Song);
-         Window.Document.Title (Value => "MP " & Song);
+         Window.Document.Title (Value => Title & ' ' & Song);
 
          Wait_For_Ready : for I in 1 .. 10 loop
             if Player.Ready_To_Play then
                Player.Play;
+               Gnoga.Log("DJ.Start started "&Song);
 
                return True;
             end if;
@@ -269,6 +271,7 @@ package body MP.UI is
             delay 0.01;
          end loop Wait_For_Ready;
 
+         Gnoga.Log("DJ.Start failed to start "&Song);
          return False;
       end Start;
 
@@ -281,7 +284,8 @@ package body MP.UI is
 
          select
             accept Quit;
-            Window.Document.Title (Value => "MP");
+
+            Window.Document.Title (Value => Title);
             Run := False;
          or
             delay 1.0;
@@ -304,13 +308,13 @@ package body MP.UI is
                   or
                      accept Skip;
 
-                     Window.Document.Title (Value => "MP");
+                     Window.Document.Title (Value => Title);
 
                      exit Wait_For_End;
                   or
                      accept Quit;
 
-                     Window.Document.Title (Value => "MP");
+                     Window.Document.Title (Value => Title);
 
                      exit Forever;
                   or
@@ -331,7 +335,7 @@ package body MP.UI is
          end loop Forever;
 
          if Quit_After.Checked then
-            Window.Document.Title (Value => "MP");
+            Window.Document.Title (Value => Title);
             Gnoga.Application.Singleton.End_Application;
          end if;
       end if;
@@ -340,8 +344,8 @@ package body MP.UI is
       Gnoga.Log (Message => "DJ: " & Ada.Exceptions.Exception_Information (E) );
    end DJ;
 begin -- MP.UI
-   Gnoga.Application.Title (Name => "MP");
-   Gnoga.Application.HTML_On_Close (HTML => "MP ended.");
+   Gnoga.Application.Title (Name => Title);
+   Gnoga.Application.HTML_On_Close (HTML => Title & " ended.");
    Gnoga.Application.Open_URL (url => "http://localhost:8089/");
    Gnoga.Application.Singleton.Initialize (Main_Window => Window, Port => 8089);
    View.Create (Parent => Window);

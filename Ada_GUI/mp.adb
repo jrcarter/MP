@@ -201,7 +201,7 @@ procedure MP is
          Player.Pause;
       end if;
 
-      List.Delete (Item => To_Bounded_String (Sel.Text (Index) ) );
+      List.Delete (Item => To_Bounded_String (Sel.Text) );
       Refresh;
 
       if Player.Paused then
@@ -308,7 +308,7 @@ begin -- MP
       Current := Song.Element (Index);
       Sel.Set_Selected (Index => Current.Position);
 
-      if Start (Sel.Text) then
+      if Start (To_String (Current.Path) ) then
          Wait_For_End : loop
             Event := Ada_GUI.Next_Event (Timeout => 0.1);
 

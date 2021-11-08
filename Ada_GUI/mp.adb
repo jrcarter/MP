@@ -63,7 +63,7 @@ procedure MP is
       return Left < Right;
    end Less;
 
-   List : Path_Lists.Persistent_Skip_List := Path_Lists.Open_List ("playlist.mpl");
+   List : Path_Lists.Persistent_Skip_List := Path_Lists.Open_List ("playlist.mpl", Write_On_Modify => True);
    Song : Song_Lists.Vector;
 
    procedure Make_Song_List (List : in out Song_Lists.Vector);
@@ -151,17 +151,9 @@ procedure MP is
          return;
       end if;
 
-      if not Player.Playback_Ended then
-         Player.Pause;
-      end if;
-
       List.Insert (Item => To_Bounded_String (Name) );
       Refresh;
       Path.Set_Text (Text => "");
-
-      if Player.Paused then
-         Player.Play;
-      end if;
    exception -- Add_Song
    when Error : others =>
       Ada.Text_IO.Put_Line (Item => "Add_Song " & Ada.Exceptions.Exception_Information (Error) );
@@ -197,16 +189,8 @@ procedure MP is
          return;
       end if;
 
-      if not Player.Playback_Ended then
-         Player.Pause;
-      end if;
-
       List.Delete (Item => To_Bounded_String (Sel.Text) );
       Refresh;
-
-      if Player.Paused then
-         Player.Play;
-      end if;
    exception -- Delete_Song
    when Error : others =>
       Ada.Text_IO.Put_Line (Item => "Delete_Song " & Ada.Exceptions.Exception_Information (Error) );
@@ -239,21 +223,18 @@ procedure MP is
    function Start (Song : in String) return Boolean is
       -- Empty
    begin -- Start
-   Ada.Text_IO.Put_Line("Start "&Song);
       Player.Set_Source (Source => Song);
       Ada_GUI.Set_Title (Title => Title & ' ' & Song);
 
       Wait_For_Ready : for I in 1 .. 10 loop
          if Player.Ready then
             Player.Play;
-   Ada.Text_IO.Put_Line("Start started "&Song);
 
             return True;
          end if;
 
          delay 0.01;
       end loop Wait_For_Ready;
-   Ada.Text_IO.Put_Line("Start failed "&Song);
 
       return False;
    exception -- Start

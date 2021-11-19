@@ -286,6 +286,8 @@ begin -- MP
    end loop Wait_For_Song;
 
    Forever : loop
+      exit Forever when Ada_GUI.Window_Closed;
+
       Current := Song.Element (Index);
       Sel.Set_Selected (Index => Current.Position);
 
@@ -296,16 +298,14 @@ begin -- MP
             if Event.Timed_Out then
                exit Wait_For_End when Player.Playback_Ended;
             elsif Event.Event.Kind = Ada_GUI.Left_Click then
+               exit Forever when Event.Event.ID = Quit;
+
                if Event.Event.ID = Play then
                   exit Wait_For_End when not Start (Sel.Text);
                elsif Event.Event.ID = Skip then
                   Ada_GUI.Set_Title (Title => Title);
 
                   exit Wait_For_End;
-               elsif Event.Event.ID = Quit then
-                  Quit_Now;
-
-                  return;
                elsif Event.Event.ID = Add then
                   Add_Song;
                elsif Event.Event.ID = Browse then

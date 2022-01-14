@@ -121,6 +121,7 @@ procedure MP is
 
       procedure Add_All is new Path_Lists.Iterate (Action => Add_One);
    begin -- Make_Song_List
+      Sel.Clear;
       List.Clear;
       Add_All (List => MP.List);
    end Make_Song_List;
@@ -211,7 +212,6 @@ procedure MP is
    procedure Refresh is
       -- Empty
    begin -- Refresh
-      Sel.Clear;
       Make_Song_List (List => Song);
       Count.Set_Text (Text => Integer'Image (Sel.Length) );
       Shuffle (List => Song);
@@ -286,8 +286,6 @@ begin -- MP
    end loop Wait_For_Song;
 
    Forever : loop
-      exit Forever when Ada_GUI.Window_Closed;
-
       Current := Song.Element (Index);
       Sel.Set_Selected (Index => Current.Position);
 
@@ -297,6 +295,8 @@ begin -- MP
 
             if Event.Timed_Out then
                exit Wait_For_End when Player.Playback_Ended;
+            elsif Event.Event.Kind = Ada_GUI.Window_Closed then
+               exit Forever;
             elsif Event.Event.Kind = Ada_GUI.Left_Click then
                exit Forever when Event.Event.ID = Quit;
 

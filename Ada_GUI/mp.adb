@@ -1,5 +1,5 @@
 -- Ada-GUI version of MP: a Music Player
--- Copyright (C) 2021 by PragmAda Software Engineering.  All rights reserved.
+-- Copyright (C) 2022 by PragmAda Software Engineering.  All rights reserved.
 -- Released under the terms of the BSD 3-Clause license; see https://opensource.org/licenses
 
 with Ada.Containers.Vectors;
@@ -264,71 +264,81 @@ begin -- MP
 
    -- Now we're ready to go
 
-   -- If Song is empty, we wait until a song is added or the user clicks on Quit, ignoring other buttons
-   Wait_For_Song : loop
-      exit Wait_For_Song when List.Length > 0;
+   All_Cycles : loop
+      -- If Song is empty, we wait until a song is added or the user clicks on Quit or closes the window, ignoring other buttons
+      Wait_For_Song : loop
+         exit Wait_For_Song when List.Length > 0;
 
-      Event := Ada_GUI.Next_Event;
+         Event := Ada_GUI.Next_Event;
 
-      if not Event.Timed_Out and then Event.Event.Kind = Ada_GUI.Left_Click then
-         if Event.Event.ID = Add then
-            Add_Song;
-         elsif Event.Event.ID = Browse then
-            Browse_Songs;
-         elsif Event.Event.ID = Quit then
-            Quit_Now;
+         if not Event.Timed_Out then
+            exit All_Cycles when Event.Event.Kind = Ada_GUI.Window_Closed;
 
-            return;
-         else
-            null;
-         end if;
-      end if;
-   end loop Wait_For_Song;
+            if Event.Event.Kind = Ada_GUI.Left_Click then
+               exit All_Cycles when Event.Event.ID = Quit;
 
-   Forever : loop
-      Current := Song.Element (Index);
-      Sel.Set_Selected (Index => Current.Position);
-
-      if Start (To_String (Current.Path) ) then
-         Wait_For_End : loop
-            Event := Ada_GUI.Next_Event (Timeout => 0.1);
-
-            if Event.Timed_Out then
-               exit Wait_For_End when Player.Playback_Ended;
-            elsif Event.Event.Kind = Ada_GUI.Window_Closed then
-               exit Forever;
-            elsif Event.Event.Kind = Ada_GUI.Left_Click then
-               exit Forever when Event.Event.ID = Quit;
-
-               if Event.Event.ID = Play then
-                  exit Wait_For_End when not Start (Sel.Text);
-               elsif Event.Event.ID = Skip then
-                  Ada_GUI.Set_Title (Title => Title);
-
-                  exit Wait_For_End;
-               elsif Event.Event.ID = Add then
+               if Event.Event.ID = Add then
                   Add_Song;
                elsif Event.Event.ID = Browse then
                   Browse_Songs;
-               elsif Event.Event.ID = Delete then
-                  Delete_Song;
                else
                   null;
                end if;
-            else
-               null;
             end if;
-         end loop Wait_For_End;
-      end if;
+         end if;
+      end loop Wait_For_Song;
 
-      exit Forever when Quit_After.Active;
+      All_Songs : loop
+         Current := Song.Element (Index);
+         Sel.Set_Selected (Index => Current.Position);
 
-      Index := Index + 1;
+         if Start (To_String (Current.Path) ) then
+            Wait_For_End : loop
+               Event := Ada_GUI.Next_Event (Timeout => 0.1);
 
-      if Index > Song.Last_Index then
-         Index := 1;
-      end if;
-   end loop Forever;
+               if Event.Timed_Out then
+                  exit Wait_For_End when Player.Playback_Ended;
+               elsif Event.Event.Kind = Ada_GUI.Window_Closed then
+                  exit All_Cycles;
+               elsif Event.Event.Kind = Ada_GUI.Left_Click then
+                  exit All_Cycles when Event.Event.ID = Quit;
+
+                  if Event.Event.ID = Play then
+                     exit Wait_For_End when not Start (Sel.Text);
+                  elsif Event.Event.ID = Skip then
+                     Ada_GUI.Set_Title (Title => Title);
+
+                     exit Wait_For_End;
+                  elsif Event.Event.ID = Add then
+                     Add_Song;
+                  elsif Event.Event.ID = Browse then
+                     Browse_Songs;
+                  elsif Event.Event.ID = Delete then
+                     Delete_Song;
+
+                     if List.Length = 0 then
+                        Player.Pause;
+
+                        exit All_Songs;
+                     end if;
+                  else
+                     null;
+                  end if;
+               else
+                  null;
+               end if;
+            end loop Wait_For_End;
+         end if;
+
+         exit All_Cycles when Quit_After.Active;
+
+         Index := Index + 1;
+
+         if Index > Song.Last_Index then
+            Index := 1;
+         end if;
+      end loop All_Songs;
+   end loop All_Cycles;
 
    Quit_Now;
 exception -- MP

@@ -66,6 +66,11 @@ procedure MP is
    List : Path_Lists.Persistent_Skip_List := Path_Lists.Open_List ("playlist.mpl", Write_On_Modify => True);
    Song : Song_Lists.Vector;
 
+   task Sel_Loader is
+      entry Fill;
+      -- Clears Sel, then adds all the songs in List to Sel
+   end Sel_Loader;
+
    procedure Make_Song_List (List : in out Song_Lists.Vector);
    -- Adds all the songs in MP.List to List
 
@@ -105,8 +110,37 @@ procedure MP is
    Quit_After : Ada_GUI.Widget_ID;
    Event      : Ada_GUI.Next_Result_Info;
 
-   Current : Song_Info;
-   Index   : Positive := 1;
+   Current       : Song_Info;
+   Index         : Positive := 1;
+   Sel_Available : Boolean  := False with Atomic;
+
+   task body Sel_Loader is
+      procedure Add_One (Item : in Path_Name) is
+         -- Empty;
+      begin -- Add_One
+         Sel.Insert (Text => To_String (Item) );
+      end Add_One;
+
+      procedure Add_All is new Path_Lists.Iterate (Action => Add_One);
+   begin -- Sel_Loader
+      Forever : loop
+         select
+            accept Fill;
+
+            Sel_Available := False;
+            Sel.Set_Visibility (Visible => False);
+            Sel.Clear;
+            Add_All (List => List);
+            Sel.Set_Visibility (Visible => True);
+            Sel_Available := True;
+         or
+            terminate;
+         end select;
+      end loop Forever;
+   exception -- Sel_Loader
+   when E : others =>
+      Ada_GUI.Log (Message => "Sel_Loader " & Ada.Exceptions.Exception_Information (E) );
+   end Sel_Loader;
 
    procedure Make_Song_List (List : in out Song_Lists.Vector) is
       Position : Natural := 0;
@@ -116,12 +150,11 @@ procedure MP is
       begin -- Add_One
          Position := Position + 1;
          List.Append (New_Item => (Position => Position, Path => Item) );
-         Sel.Insert (Text => To_String (Item) );
       end Add_One;
 
       procedure Add_All is new Path_Lists.Iterate (Action => Add_One);
    begin -- Make_Song_List
-      Sel.Clear;
+      Sel_Loader.Fill;
       List.Clear;
       Add_All (List => MP.List);
    end Make_Song_List;
@@ -163,7 +196,7 @@ procedure MP is
    Current_Directory : constant String := Ada.Directories.Current_Directory;
 
    procedure Browse_Songs is
-      Pick : Ada_GUI.File_Result_Info := Ada_GUI.Selected_File (Current_Directory);
+      Pick : Ada_GUI.Dialogs.File_Result_Info := Ada_GUI.Dialogs.Selected_File (Current_Directory);
    begin -- Browse_Songs
       if not Pick.Picked then
          return;
@@ -213,7 +246,7 @@ procedure MP is
       -- Empty
    begin -- Refresh
       Make_Song_List (List => Song);
-      Count.Set_Text (Text => Integer'Image (Sel.Length) );
+      Count.Set_Text (Text => Integer'Image (List.Length) );
       Shuffle (List => Song);
    exception -- Refresh
    when Error : others =>
@@ -290,7 +323,10 @@ begin -- MP
 
       All_Songs : loop
          Current := Song.Element (Index);
-         Sel.Set_Selected (Index => Current.Position);
+
+         if Sel_Available then
+            Sel.Set_Selected (Index => Current.Position);
+         end if;
 
          if Start (To_String (Current.Path) ) then
             Wait_For_End : loop

@@ -98,6 +98,9 @@ procedure MP is
    -- Returns True if successful; False otherwise
 
    Player     : Ada_GUI.Widget_ID;
+   Load_Label : Ada_GUI.Widget_ID;
+   Loading    : Ada_GUI.Widget_ID;
+   Load_Count : Ada_GUI.Widget_ID;
    Sel        : Ada_GUI.Widget_ID;
    Count      : Ada_GUI.Widget_ID;
    Delete     : Ada_GUI.Widget_ID;
@@ -115,10 +118,20 @@ procedure MP is
    Sel_Available : Boolean  := False with Atomic;
 
    task body Sel_Loader is
+      Max    : Natural;
+      Length : Natural;
+      Count  : Natural := 0;
+
       procedure Add_One (Item : in Path_Name) is
          -- Empty;
       begin -- Add_One
          Sel.Insert (Text => To_String (Item) );
+         Count := Count + 1;
+
+         if Count rem 10 = 0 then
+            Loading.Set_Value (Value => Max * Count / Length);
+            Load_Count.Set_Text (Text => Count'Image);
+         end if;
       end Add_One;
 
       procedure Add_All is new Path_Lists.Iterate (Action => Add_One);
@@ -127,12 +140,20 @@ procedure MP is
          select
             accept Fill;
 
+            Max := Loading.Maximum;
+            Length := List.Length;
             Sel_Available := False;
             Sel.Set_Visibility (Visible => False);
+            Load_Label.Set_Visibility (Visible => True);
+            Loading.Set_Visibility (Visible => True);
+            Load_Count.Set_Visibility (Visible => True);
             Sel.Clear;
             Add_All (List => List);
             Sel.Set_Visibility (Visible => True);
             Sel_Available := True;
+            Load_Label.Set_Visibility (Visible => False);
+            Loading.Set_Visibility (Visible => False);
+            Load_Count.Set_Visibility (Visible => False);
          or
             terminate;
          end select;
@@ -282,6 +303,9 @@ procedure MP is
 begin -- MP
    Ada_GUI.Set_Up (Title => Title, ID => 8089);
    Player     := Ada_GUI.New_Audio_Player;
+   Load_Label := Ada_GUI.New_Background_Text (Text => "Loading ", Break_Before => True);
+   Loading    := Ada_GUI.New_Progress_Bar;
+   Load_Count := Ada_GUI.New_Background_Text;
    Sel        := Ada_GUI.New_Selection_List (Break_Before => True, Height => 30);
    Count      := Ada_GUI.New_Text_Box (Label => "Number of songs:", Break_Before => True);
    Delete     := Ada_GUI.New_Button (Text => "Delete", Break_Before => True);

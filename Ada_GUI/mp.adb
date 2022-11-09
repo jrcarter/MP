@@ -120,7 +120,7 @@ procedure MP is
    task body Sel_Loader is
       Max    : Natural;
       Length : Natural;
-      Count  : Natural := 0;
+      Count  : Natural;
 
       procedure Add_One (Item : in Path_Name) is
          -- Empty;
@@ -142,6 +142,7 @@ procedure MP is
 
             Max := Loading.Maximum;
             Length := List.Length;
+            Count := 0;
             Sel_Available := False;
             Sel.Set_Visibility (Visible => False);
             Load_Label.Set_Visibility (Visible => True);

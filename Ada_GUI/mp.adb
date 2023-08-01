@@ -71,7 +71,7 @@ procedure MP is
       -- Clears Sel, then adds all the songs in List to Sel
    end Sel_Loader;
 
-   procedure Make_Song_List (List : in out Song_Lists.Vector);
+   procedure Make_Song_List (List : in out Song_Lists.Vector; Refill : in Boolean := True);
    -- Adds all the songs in MP.List to List
 
    procedure Shuffle (List : in out Song_Lists.Vector);
@@ -121,6 +121,8 @@ procedure MP is
       Max    : Natural;
       Length : Natural;
       Count  : Natural;
+      Pos    : Natural;
+      Path   : Path_Name;
 
       procedure Add_One (Item : in Path_Name) is
          -- Empty;
@@ -128,7 +130,12 @@ procedure MP is
          Sel.Insert (Text => To_String (Item) );
          Count := Count + 1;
 
-         if Count rem 10 = 0 then
+         if Item = Current.Path then -- Position may change from that in Current
+            Pos := Count;
+            Path := Item;
+         end if;
+
+         if Count rem (Length / 100) = 0 then
             Loading.Set_Value (Value => Max * Count / Length);
             Load_Count.Set_Text (Text => Count'Image);
          end if;
@@ -143,6 +150,8 @@ procedure MP is
             Max := Loading.Maximum;
             Length := List.Length;
             Count := 0;
+            Pos := 0;
+            Path := Null_Bounded_String;
             Sel_Available := False;
             Sel.Set_Visibility (Visible => False);
             Load_Label.Set_Visibility (Visible => True);
@@ -151,6 +160,11 @@ procedure MP is
             Sel.Clear;
             Add_All (List => List);
             Sel.Set_Visibility (Visible => True);
+
+            if Pos > 0 and Current.Path = Path then -- Try to restore selection of current song
+               Sel.Set_Selected (Index => Pos);
+            end if;
+
             Sel_Available := True;
             Load_Label.Set_Visibility (Visible => False);
             Loading.Set_Visibility (Visible => False);
@@ -164,7 +178,7 @@ procedure MP is
       Ada_GUI.Log (Message => "Sel_Loader " & Ada.Exceptions.Exception_Information (E) );
    end Sel_Loader;
 
-   procedure Make_Song_List (List : in out Song_Lists.Vector) is
+   procedure Make_Song_List (List : in out Song_Lists.Vector; Refill : in Boolean := True) is
       Position : Natural := 0;
 
       procedure Add_One (Item : in Path_Name) is
@@ -176,9 +190,14 @@ procedure MP is
 
       procedure Add_All is new Path_Lists.Iterate (Action => Add_One);
    begin -- Make_Song_List
-      Sel_Loader.Fill;
+      if Refill then
+         Sel_Loader.Fill;
+      end if;
+
       List.Clear;
       Add_All (List => MP.List);
+      Shuffle (List => List);
+      Index := 1;
    end Make_Song_List;
 
    procedure Shuffle (List : in out Song_Lists.Vector) is
@@ -202,14 +221,33 @@ procedure MP is
 
    procedure Add_Song is
       Name : constant String := Path.Text;
+
+      Found  : Boolean := False;
+      Before : Natural := 0;
+
+      procedure Check_One (Item : in Path_Name) is
+         -- Empty
+      begin -- Check_One
+         if Found then
+            return;
+         end if;
+
+         Before := Before + 1;
+         Found := Name = To_String (Item);
+      end Check_One;
+
+      procedure Find_Before is new Path_Lists.Iterate (Action => Check_One);
    begin -- Add_Song
       if Name = "" then
          return;
       end if;
 
       List.Insert (Item => To_Bounded_String (Name) );
-      Refresh;
+      Find_Before (List => List);
+      Sel.Insert (Text => Name, Before => Before);
+      Sel.Set_Selected (Index => Before);
       Path.Set_Text (Text => "");
+      Make_Song_List (List => Song, Refill => False);
    exception -- Add_Song
    when Error : others =>
       Ada.Text_IO.Put_Line (Item => "Add_Song " & Ada.Exceptions.Exception_Information (Error) );
@@ -217,8 +255,10 @@ procedure MP is
 
    Current_Directory : constant String := Ada.Directories.Current_Directory;
 
+   Last_Directory : Ada.Strings.Unbounded.Unbounded_String := Ada.Strings.Unbounded.To_Unbounded_String (Current_Directory);
+
    procedure Browse_Songs is
-      Pick : Ada_GUI.Dialogs.File_Result_Info := Ada_GUI.Dialogs.Selected_File (Current_Directory);
+      Pick : Ada_GUI.Dialogs.File_Result_Info := Ada_GUI.Dialogs.Selected_File (Ada.Strings.Unbounded.To_String (Last_Directory) );
    begin -- Browse_Songs
       if not Pick.Picked then
          return;
@@ -231,6 +271,7 @@ procedure MP is
             Name (Name'First .. Name'First + Current_Directory'Length - 1) = Current_Directory
          then
             Path.Set_Text (Text => Name (Name'First + Current_Directory'Length + 1 .. Name'Last) );
+            Last_Directory := Ada.Strings.Unbounded.To_Unbounded_String (Ada.Directories.Containing_Directory (Name) );
          end if;
       end Get_Name;
    exception -- Browse_Songs
@@ -239,14 +280,15 @@ procedure MP is
    end Browse_Songs;
 
    procedure Delete_Song is
-      Index : constant Natural := Sel.Selected;
+      Pos : constant Natural := Sel.Selected;
    begin -- Delete_Song
-      if Index = 0 then
+      if Pos = 0 then
          return;
       end if;
 
       List.Delete (Item => To_Bounded_String (Sel.Text) );
-      Refresh;
+      Sel.Delete (Index => Pos);
+      Make_Song_List (List => Song, Refill => False);
    exception -- Delete_Song
    when Error : others =>
       Ada.Text_IO.Put_Line (Item => "Delete_Song " & Ada.Exceptions.Exception_Information (Error) );
@@ -258,6 +300,13 @@ procedure MP is
       -- Empty
    begin -- Quit_Now
       Ada_GUI.Set_Title (Title => Title);
+
+      Wait_For_Sel : loop -- Ending the GUI while Sel is being updated will cause problems
+         exit Wait_For_Sel when Sel_Available;
+
+         delay 0.1;
+      end loop Wait_For_Sel;
+
       Ada_GUI.End_GUI;
    exception -- Quit_Now
    when Error : others =>
@@ -269,7 +318,6 @@ procedure MP is
    begin -- Refresh
       Make_Song_List (List => Song);
       Count.Set_Text (Text => Integer'Image (List.Length) );
-      Shuffle (List => Song);
    exception -- Refresh
    when Error : others =>
       Ada.Text_IO.Put_Line (Item => "Refresh " & Ada.Exceptions.Exception_Information (Error) );
@@ -389,6 +437,8 @@ begin -- MP
                   null;
                end if;
             end loop Wait_For_End;
+
+            Current.Path := Null_Bounded_String;
          end if;
 
          exit All_Cycles when Quit_After.Active;

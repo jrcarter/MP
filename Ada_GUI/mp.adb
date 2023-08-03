@@ -1,5 +1,5 @@
 -- Ada-GUI version of MP: a Music Player
--- Copyright (C) 2022 by PragmAda Software Engineering.  All rights reserved.
+-- Copyright (C) 2023 by PragmAda Software Engineering.  All rights reserved.
 -- Released under the terms of the BSD 3-Clause license; see https://opensource.org/licenses
 
 with Ada.Containers.Vectors;
@@ -124,6 +124,9 @@ procedure MP is
       Pos    : Natural;
       Path   : Path_Name;
 
+      procedure Add_One (Item : in Path_Name);
+      -- Appends Item to Sel
+
       procedure Add_One (Item : in Path_Name) is
          -- Empty;
       begin -- Add_One
@@ -179,6 +182,9 @@ procedure MP is
    end Sel_Loader;
 
    procedure Make_Song_List (List : in out Song_Lists.Vector; Refill : in Boolean := True) is
+      procedure Add_One (Item : in Path_Name);
+      -- Increments Position and appends (Position => Position, Path => Item) to List
+
       Position : Natural := 0;
 
       procedure Add_One (Item : in Path_Name) is
@@ -222,6 +228,10 @@ procedure MP is
    procedure Add_Song is
       Name : constant String := Path.Text;
 
+      procedure Check_One (Item : in Path_Name);
+      -- If Found, returns immediately
+      -- Otherwise, increments Before and sets Found to Name = Item
+
       Found  : Boolean := False;
       Before : Natural := 0;
 
@@ -237,6 +247,9 @@ procedure MP is
       end Check_One;
 
       procedure Find_Before is new Path_Lists.Iterate (Action => Check_One);
+      -- We know Name is in List because we just inserted it
+      -- Sets Before to the position of Name in List
+      -- Since Name is not in Sel, Before is the index in Sel before which Name should be inserted
    begin -- Add_Song
       if Name = "" then
          return;

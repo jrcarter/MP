@@ -97,21 +97,22 @@ procedure MP is
    -- Tries to start playing a file named Song
    -- Returns True if successful; False otherwise
 
-   Player     : Ada_GUI.Widget_ID;
-   Load_Label : Ada_GUI.Widget_ID;
-   Loading    : Ada_GUI.Widget_ID;
-   Load_Count : Ada_GUI.Widget_ID;
-   Sel        : Ada_GUI.Widget_ID;
-   Count      : Ada_GUI.Widget_ID;
-   Delete     : Ada_GUI.Widget_ID;
-   Path       : Ada_GUI.Widget_ID;
-   Browse     : Ada_GUI.Widget_ID;
-   Add        : Ada_GUI.Widget_ID;
-   Play       : Ada_GUI.Widget_ID;
-   Skip       : Ada_GUI.Widget_ID;
-   Quit       : Ada_GUI.Widget_ID;
-   Quit_After : Ada_GUI.Widget_ID;
-   Event      : Ada_GUI.Next_Result_Info;
+   Player      : Ada_GUI.Widget_ID;
+   Load_Label  : Ada_GUI.Widget_ID;
+   Loading     : Ada_GUI.Widget_ID;
+   Load_Count  : Ada_GUI.Widget_ID;
+   Sel         : Ada_GUI.Widget_ID;
+   Count       : Ada_GUI.Widget_ID;
+   Delete      : Ada_GUI.Widget_ID;
+   Path        : Ada_GUI.Widget_ID;
+   Browse      : Ada_GUI.Widget_ID;
+   Add         : Ada_GUI.Widget_ID;
+   Play        : Ada_GUI.Widget_ID;
+   Skip        : Ada_GUI.Widget_ID;
+   Quit        : Ada_GUI.Widget_ID;
+   Quit_After  : Ada_GUI.Widget_ID;
+   Pause_After : Ada_GUI.Widget_ID;
+   Event       : Ada_GUI.Next_Result_Info;
 
    Current       : Song_Info;
    Index         : Positive := 1;
@@ -364,20 +365,21 @@ procedure MP is
    use type Ada_GUI.Widget_ID;
 begin -- MP
    Ada_GUI.Set_Up (Title => Title, ID => 8089);
-   Player     := Ada_GUI.New_Audio_Player;
-   Load_Label := Ada_GUI.New_Background_Text (Text => "Loading ", Break_Before => True);
-   Loading    := Ada_GUI.New_Progress_Bar;
-   Load_Count := Ada_GUI.New_Background_Text;
-   Sel        := Ada_GUI.New_Selection_List (Break_Before => True, Height => 30);
-   Count      := Ada_GUI.New_Text_Box (Label => "Number of songs:", Break_Before => True);
-   Delete     := Ada_GUI.New_Button (Text => "Delete", Break_Before => True);
-   Path       := Ada_GUI.New_Text_Box (Width => 100);
-   Browse     := Ada_GUI.New_Button (Text => "Browse");
-   Add        := Ada_GUI.New_Button (Text => "Add");
-   Play       := Ada_GUI.New_Button (Text => "Play", Break_Before => True);
-   Skip       := Ada_GUI.New_Button (Text => "Skip");
-   Quit       := Ada_GUI.New_Button (Text => "Quit");
-   Quit_After := Ada_GUI.New_Check_Box (Label => "Quit after this song");
+   Player      := Ada_GUI.New_Audio_Player;
+   Load_Label  := Ada_GUI.New_Background_Text (Text => "Loading ", Break_Before => True);
+   Loading     := Ada_GUI.New_Progress_Bar;
+   Load_Count  := Ada_GUI.New_Background_Text;
+   Sel         := Ada_GUI.New_Selection_List (Break_Before => True, Height => 30);
+   Count       := Ada_GUI.New_Text_Box (Label => "Number of songs:", Break_Before => True);
+   Delete      := Ada_GUI.New_Button (Text => "Delete", Break_Before => True);
+   Path        := Ada_GUI.New_Text_Box (Width => 100);
+   Browse      := Ada_GUI.New_Button (Text => "Browse");
+   Add         := Ada_GUI.New_Button (Text => "Add");
+   Play        := Ada_GUI.New_Button (Text => "Play", Break_Before => True);
+   Skip        := Ada_GUI.New_Button (Text => "Skip");
+   Quit        := Ada_GUI.New_Button (Text => "Quit");
+   Quit_After  := Ada_GUI.New_Check_Box (Label => "Quit after this song");
+   Pause_After := Ada_GUI.New_Check_Box (Label => "Pause after this song");
 
    Refresh;
 
@@ -415,6 +417,11 @@ begin -- MP
          end if;
 
          if Start (To_String (Current.Path) ) then
+            if Pause_After.Active then
+               Player.Pause;
+               Pause_After.Set_Active (Active => False);
+            end if;
+
             Wait_For_End : loop
                Event := Ada_GUI.Next_Event (Timeout => 0.1);
 

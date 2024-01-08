@@ -1,5 +1,5 @@
 -- Ada-GUI version of MP: a Music Player
--- Copyright (C) 2023 by PragmAda Software Engineering.  All rights reserved.
+-- Copyright (C) 2024 by PragmAda Software Engineering.  All rights reserved.
 -- Released under the terms of the BSD 3-Clause license; see https://opensource.org/licenses
 
 with Ada.Containers.Vectors;
@@ -66,12 +66,7 @@ procedure MP is
    List : Path_Lists.Persistent_Skip_List := Path_Lists.Open_List ("playlist.mpl", Write_On_Modify => True);
    Song : Song_Lists.Vector;
 
-   task Sel_Loader is
-      entry Fill;
-      -- Clears Sel, then adds all the songs in List to Sel
-   end Sel_Loader;
-
-   procedure Make_Song_List (List : in out Song_Lists.Vector; Refill : in Boolean := True);
+   procedure Make_Song_List (List : in out Song_Lists.Vector);
    -- Adds all the songs in MP.List to List
 
    procedure Shuffle (List : in out Song_Lists.Vector);
@@ -97,10 +92,10 @@ procedure MP is
    -- Tries to start playing a file named Song
    -- Returns True if successful; False otherwise
 
+   function Text_List (List : in out Path_Lists.Persistent_Skip_List) return Ada_GUI.Text_List;
+   -- Converts the strings in List into a Text_List
+
    Player      : Ada_GUI.Widget_ID;
-   Load_Label  : Ada_GUI.Widget_ID;
-   Loading     : Ada_GUI.Widget_ID;
-   Load_Count  : Ada_GUI.Widget_ID;
    Sel         : Ada_GUI.Widget_ID;
    Count       : Ada_GUI.Widget_ID;
    Delete      : Ada_GUI.Widget_ID;
@@ -114,75 +109,10 @@ procedure MP is
    Pause_After : Ada_GUI.Widget_ID;
    Event       : Ada_GUI.Next_Result_Info;
 
-   Current       : Song_Info;
-   Index         : Positive := 1;
-   Sel_Available : Boolean  := False with Atomic;
+   Current : Song_Info;
+   Index   : Positive := 1;
 
-   task body Sel_Loader is
-      Max    : Natural;
-      Length : Natural;
-      Count  : Natural;
-      Pos    : Natural;
-      Path   : Path_Name;
-
-      procedure Add_One (Item : in Path_Name);
-      -- Appends Item to Sel
-
-      procedure Add_One (Item : in Path_Name) is
-         -- Empty;
-      begin -- Add_One
-         Sel.Insert (Text => To_String (Item) );
-         Count := Count + 1;
-
-         if Item = Current.Path then -- Position may change from that in Current
-            Pos := Count;
-            Path := Item;
-         end if;
-
-         if Count rem (Length / 100) = 0 then
-            Loading.Set_Value (Value => Max * Count / Length);
-            Load_Count.Set_Text (Text => Count'Image);
-         end if;
-      end Add_One;
-
-      procedure Add_All is new Path_Lists.Iterate (Action => Add_One);
-   begin -- Sel_Loader
-      Forever : loop
-         select
-            accept Fill;
-
-            Max := Loading.Maximum;
-            Length := List.Length;
-            Count := 0;
-            Pos := 0;
-            Path := Null_Bounded_String;
-            Sel_Available := False;
-            Sel.Set_Visibility (Visible => False);
-            Load_Label.Set_Visibility (Visible => True);
-            Loading.Set_Visibility (Visible => True);
-            Load_Count.Set_Visibility (Visible => True);
-            Sel.Clear;
-            Add_All (List => List);
-            Sel.Set_Visibility (Visible => True);
-
-            if Pos > 0 and Current.Path = Path then -- Try to restore selection of current song
-               Sel.Set_Selected (Index => Pos);
-            end if;
-
-            Sel_Available := True;
-            Load_Label.Set_Visibility (Visible => False);
-            Loading.Set_Visibility (Visible => False);
-            Load_Count.Set_Visibility (Visible => False);
-         or
-            terminate;
-         end select;
-      end loop Forever;
-   exception -- Sel_Loader
-   when E : others =>
-      Ada_GUI.Log (Message => "Sel_Loader " & Ada.Exceptions.Exception_Information (E) );
-   end Sel_Loader;
-
-   procedure Make_Song_List (List : in out Song_Lists.Vector; Refill : in Boolean := True) is
+   procedure Make_Song_List (List : in out Song_Lists.Vector) is
       procedure Add_One (Item : in Path_Name);
       -- Increments Position and appends (Position => Position, Path => Item) to List
 
@@ -197,10 +127,6 @@ procedure MP is
 
       procedure Add_All is new Path_Lists.Iterate (Action => Add_One);
    begin -- Make_Song_List
-      if Refill then
-         Sel_Loader.Fill;
-      end if;
-
       List.Clear;
       Add_All (List => MP.List);
       Shuffle (List => List);
@@ -261,7 +187,7 @@ procedure MP is
       Sel.Insert (Text => Name, Before => Before);
       Sel.Set_Selected (Index => Before);
       Path.Set_Text (Text => "");
-      Make_Song_List (List => Song, Refill => False);
+      Make_Song_List (List => Song);
    exception -- Add_Song
    when Error : others =>
       Ada.Text_IO.Put_Line (Item => "Add_Song " & Ada.Exceptions.Exception_Information (Error) );
@@ -272,7 +198,8 @@ procedure MP is
    Last_Directory : Ada.Strings.Unbounded.Unbounded_String := Ada.Strings.Unbounded.To_Unbounded_String (Current_Directory);
 
    procedure Browse_Songs is
-      Pick : Ada_GUI.Dialogs.File_Result_Info := Ada_GUI.Dialogs.Selected_File (Ada.Strings.Unbounded.To_String (Last_Directory) );
+      Pick : Ada_GUI.Dialogs.File_Result_Info :=
+         Ada_GUI.Dialogs.Selected_File (Ada.Strings.Unbounded.To_String (Last_Directory) );
    begin -- Browse_Songs
       if not Pick.Picked then
          return;
@@ -302,7 +229,7 @@ procedure MP is
 
       List.Delete (Item => To_Bounded_String (Sel.Text) );
       Sel.Delete (Index => Pos);
-      Make_Song_List (List => Song, Refill => False);
+      Make_Song_List (List => Song);
    exception -- Delete_Song
    when Error : others =>
       Ada.Text_IO.Put_Line (Item => "Delete_Song " & Ada.Exceptions.Exception_Information (Error) );
@@ -314,13 +241,6 @@ procedure MP is
       -- Empty
    begin -- Quit_Now
       Ada_GUI.Set_Title (Title => Title);
-
-      Wait_For_Sel : loop -- Ending the GUI while Sel is being updated will cause problems
-         exit Wait_For_Sel when Sel_Available;
-
-         delay 0.1;
-      end loop Wait_For_Sel;
-
       Ada_GUI.End_GUI;
    exception -- Quit_Now
    when Error : others =>
@@ -361,16 +281,31 @@ procedure MP is
       return False;
    end Start;
 
+   function Text_List (List : in out Path_Lists.Persistent_Skip_List) return Ada_GUI.Text_List is
+      Result : Ada_GUI.Text_List (1 .. List.Length);
+      Index  : Positive := Result'First;
+
+      procedure Add_One (Item : in Path_Name) is
+         use Ada.Strings.Unbounded;
+      begin -- Add_One
+         Result (Index) := To_Unbounded_String (To_String (Item) );
+         Index := Index + 1;
+      end Add_One;
+
+      procedure Add_All is new Path_Lists.Iterate (Action => Add_One);
+   begin -- Text_List
+      Add_All (List => List);
+
+      return Result;
+   end Text_List;
+
    use type Ada_GUI.Event_Kind_ID;
    use type Ada_GUI.Widget_ID;
 begin -- MP
    Ada_GUI.Set_Up (Title => Title, ID => 8089);
    Player      := Ada_GUI.New_Audio_Player;
-   Load_Label  := Ada_GUI.New_Background_Text (Text => "Loading ", Break_Before => True);
-   Loading     := Ada_GUI.New_Progress_Bar;
-   Load_Count  := Ada_GUI.New_Background_Text;
-   Sel         := Ada_GUI.New_Selection_List (Break_Before => True, Height => 30);
-   Count       := Ada_GUI.New_Text_Box (Label => "Number of songs:", Break_Before => True);
+   Sel         := Ada_GUI.New_Selection_List (Text => Text_List (List), Break_Before => True, Height => 30);
+   Count       := Ada_GUI.New_Text_Box (Text => List.Length'Image, Label => "Number of songs:", Break_Before => True);
    Delete      := Ada_GUI.New_Button (Text => "Delete", Break_Before => True);
    Path        := Ada_GUI.New_Text_Box (Width => 100);
    Browse      := Ada_GUI.New_Button (Text => "Browse");
@@ -411,10 +346,7 @@ begin -- MP
 
       All_Songs : loop
          Current := Song.Element (Index);
-
-         if Sel_Available then
-            Sel.Set_Selected (Index => Current.Position);
-         end if;
+         Sel.Set_Selected (Index => Current.Position);
 
          if Start (To_String (Current.Path) ) then
             if Pause_After.Active then

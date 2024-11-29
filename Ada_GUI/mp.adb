@@ -2,17 +2,20 @@
 -- Copyright (C) 2024 by PragmAda Software Engineering.  All rights reserved.
 -- Released under the terms of the BSD 3-Clause license; see https://opensource.org/licenses
 
+with Ada.Calendar;
 with Ada.Containers.Vectors;
 with Ada.Directories;
 with Ada.Exceptions;
-with Ada.Numerics.Discrete_Random;
 with Ada.Strings.Bounded;
 with Ada.Strings.Unbounded;
-with Ada.Text_IO;
 
 with Ada_GUI;
 
+with Interfaces;
+
 with PragmARC.Persistent_Skip_List_Unbounded;
+with PragmARC.Randomness.Threefry;
+with PragmARC.Randomness.U32_Ranges;
 
 procedure MP is
    package B_Strings is new Ada.Strings.Bounded.Generic_Bounded_Length (Max => 400);
@@ -95,19 +98,27 @@ procedure MP is
    function Text_List (List : in out Path_Lists.Persistent_Skip_List) return Ada_GUI.Text_List;
    -- Converts the strings in List into a Text_List
 
-   Player      : Ada_GUI.Widget_ID;
-   Sel         : Ada_GUI.Widget_ID;
-   Count       : Ada_GUI.Widget_ID;
-   Delete      : Ada_GUI.Widget_ID;
-   Path        : Ada_GUI.Widget_ID;
-   Browse      : Ada_GUI.Widget_ID;
-   Add         : Ada_GUI.Widget_ID;
-   Play        : Ada_GUI.Widget_ID;
-   Skip        : Ada_GUI.Widget_ID;
-   Quit        : Ada_GUI.Widget_ID;
-   Quit_After  : Ada_GUI.Widget_ID;
-   Pause_After : Ada_GUI.Widget_ID;
-   Event       : Ada_GUI.Next_Result_Info;
+   function Passed return Boolean;
+   -- Returns True if the time given by Hour_Sel and Min_Sel has passed; False otherwise
+
+   Player     : Ada_GUI.Widget_ID;
+   Sel        : Ada_GUI.Widget_ID;
+   Count      : Ada_GUI.Widget_ID;
+   Delete     : Ada_GUI.Widget_ID;
+   Path       : Ada_GUI.Widget_ID;
+   Browse     : Ada_GUI.Widget_ID;
+   Add        : Ada_GUI.Widget_ID;
+   Play       : Ada_GUI.Widget_ID;
+   Skip       : Ada_GUI.Widget_ID;
+   Quit       : Ada_GUI.Widget_ID;
+   After_Song : Ada_GUI.Widget_ID;
+   PQ_Song    : Ada_GUI.Widget_ID;
+   Space      : Ada_GUI.Widget_ID;
+   After_Time : Ada_GUI.Widget_ID;
+   Hour_Sel   : Ada_GUI.Widget_ID;
+   Min_Sel    : Ada_GUI.Widget_ID;
+   PQ_Time    : Ada_GUI.Widget_ID;
+   Event      : Ada_GUI.Next_Result_Info;
 
    Current : Song_Info;
    Index   : Positive := 1;
@@ -134,21 +145,25 @@ procedure MP is
    end Make_Song_List;
 
    procedure Shuffle (List : in out Song_Lists.Vector) is
-      subtype Index is Integer range 1 .. List.Last_Index;
+      function Random is New PragmARC.Randomness.U32_Ranges
+         (Generator => PragmARC.Randomness.Threefry.Generator, Random => PragmARC.Randomness.Threefry.Random);
 
-      package Index_Random is new Ada.Numerics.Discrete_Random (Result_Subtype => Index);
+      subtype U32 is Interfaces.Unsigned_32;
 
-      Gen : Index_Random.Generator;
-      J   : Index;
+      Gen : PragmARC.Randomness.Threefry.Generator;
+      J   : Positive;
       T   : Song_Info;
    begin -- Shuffle
-      Index_Random.Reset (Gen => Gen);
+      Gen.Randomize;
 
-      Swap_All : for I in 1 .. List.Last_Index loop
-         J := Index_Random.Random (Gen);
-         T := List.Element (I);
-         List.Replace_Element (Index => I, New_Item => List.Element (J) );
-         List.Replace_Element (Index => J, New_Item => T);
+      Swap_All : for I in 1 .. List.Last_Index - 1 loop
+         J := Integer (Random (Gen, U32 (I), U32 (List.Last_Index) ) );
+
+         if I /= J then
+            T := List.Element (I);
+            List.Replace_Element (Index => I, New_Item => List.Element (J) );
+            List.Replace_Element (Index => J, New_Item => T);
+         end if;
       end loop Swap_All;
    end Shuffle;
 
@@ -190,7 +205,7 @@ procedure MP is
       Make_Song_List (List => Song);
    exception -- Add_Song
    when Error : others =>
-      Ada.Text_IO.Put_Line (Item => "Add_Song " & Ada.Exceptions.Exception_Information (Error) );
+      Ada_GUI.Log (Message => "Add_Song " & Ada.Exceptions.Exception_Information (Error) );
    end Add_Song;
 
    Current_Directory : constant String := Ada.Directories.Current_Directory;
@@ -217,7 +232,7 @@ procedure MP is
       end Get_Name;
    exception -- Browse_Songs
    when Error : others =>
-      Ada.Text_IO.Put_Line (Item => "Browse_Songs " & Ada.Exceptions.Exception_Information (Error) );
+      Ada_GUI.Log (Message => "Browse_Songs " & Ada.Exceptions.Exception_Information (Error) );
    end Browse_Songs;
 
    procedure Delete_Song is
@@ -232,7 +247,7 @@ procedure MP is
       Make_Song_List (List => Song);
    exception -- Delete_Song
    when Error : others =>
-      Ada.Text_IO.Put_Line (Item => "Delete_Song " & Ada.Exceptions.Exception_Information (Error) );
+      Ada_GUI.Log (Message => "Delete_Song " & Ada.Exceptions.Exception_Information (Error) );
    end Delete_Song;
 
    Title : constant String := "MP";
@@ -244,7 +259,7 @@ procedure MP is
       Ada_GUI.End_GUI;
    exception -- Quit_Now
    when Error : others =>
-      Ada.Text_IO.Put_Line (Item => "Quit_Now " & Ada.Exceptions.Exception_Information (Error) );
+      Ada_GUI.Log (Message => "Quit_Now " & Ada.Exceptions.Exception_Information (Error) );
    end Quit_Now;
 
    procedure Refresh is
@@ -254,7 +269,7 @@ procedure MP is
       Count.Set_Text (Text => Integer'Image (List.Length) );
    exception -- Refresh
    when Error : others =>
-      Ada.Text_IO.Put_Line (Item => "Refresh " & Ada.Exceptions.Exception_Information (Error) );
+      Ada_GUI.Log (Message => "Refresh " & Ada.Exceptions.Exception_Information (Error) );
    end Refresh;
 
    function Start (Song : in String) return Boolean is
@@ -276,7 +291,7 @@ procedure MP is
       return False;
    exception -- Start
    when Error : others =>
-      Ada.Text_IO.Put_Line (Item => "Start " & Ada.Exceptions.Exception_Information (Error) );
+      Ada_GUI.Log (Message => "Start " & Ada.Exceptions.Exception_Information (Error) );
 
       return False;
    end Start;
@@ -299,23 +314,61 @@ procedure MP is
       return Result;
    end Text_List;
 
+   function Passed return Boolean is
+      Now  : constant Duration := Ada.Calendar.Seconds (Ada.Calendar.Clock);
+      Want : constant Duration := (Hour_Sel.Selected - 1) * 3600.0 + (Min_Sel.Selected - 1) * 60.0;
+   begin -- Passed
+      return Now >= Want;
+   end Passed;
+
+   function To_US (Value : in String) return Ada.Strings.Unbounded.Unbounded_String renames
+      Ada.Strings.Unbounded.To_Unbounded_String;
+
+   Pause_Quit : constant Ada_GUI.Text_List := (To_US ("Pause"), To_US ("Quit") );
+   Hour_Text : constant Ada_GUI.Text_List :=
+      (To_US ("00"), To_US ("01"), To_US ("02"), To_US ("03"), To_US ("04"), To_US ("05"),
+       To_US ("06"), To_US ("07"), To_US ("08"), To_US ("09"), To_US ("10"), To_US ("11"),
+       To_US ("12"), To_US ("13"), To_US ("14"), To_US ("15"), To_US ("16"), To_US ("17"),
+       To_US ("18"), To_US ("19"), To_US ("20"), To_US ("21"), To_US ("22"), To_US ("23") );
+   Min_Text : constant Ada_GUI.Text_List :=
+      (To_US ("00"), To_US ("01"), To_US ("02"), To_US ("03"), To_US ("04"), To_US ("05"),
+       To_US ("06"), To_US ("07"), To_US ("08"), To_US ("09"), To_US ("10"), To_US ("11"),
+       To_US ("12"), To_US ("13"), To_US ("14"), To_US ("15"), To_US ("16"), To_US ("17"),
+       To_US ("18"), To_US ("19"), To_US ("20"), To_US ("21"), To_US ("22"), To_US ("23"),
+       To_US ("24"), To_US ("25"), To_US ("26"), To_US ("27"), To_US ("28"), To_US ("29"),
+       To_US ("30"), To_US ("31"), To_US ("32"), To_US ("33"), To_US ("34"), To_US ("35"),
+       To_US ("36"), To_US ("37"), To_US ("38"), To_US ("39"), To_US ("40"), To_US ("41"),
+       To_US ("42"), To_US ("43"), To_US ("44"), To_US ("45"), To_US ("46"), To_US ("47"),
+       To_US ("48"), To_US ("49"), To_US ("50"), To_US ("51"), To_US ("52"), To_US ("53"),
+       To_US ("54"), To_US ("55"), To_US ("56"), To_US ("57"), To_US ("58"), To_US ("59") );
+   NBSP : constant String := "&nbsp;";
+
+   Pause_Song : Boolean;
+   Pause_Time : Boolean;
+
    use type Ada_GUI.Event_Kind_ID;
    use type Ada_GUI.Widget_ID;
 begin -- MP
    Ada_GUI.Set_Up (Title => Title, ID => 8089);
-   Player      := Ada_GUI.New_Audio_Player;
-   Sel         := Ada_GUI.New_Selection_List (Text => Text_List (List), Break_Before => True, Height => 30);
-   Count       := Ada_GUI.New_Text_Box (Text => List.Length'Image, Label => "Number of songs:", Break_Before => True);
-   Delete      := Ada_GUI.New_Button (Text => "Delete", Break_Before => True);
-   Path        := Ada_GUI.New_Text_Box (Width => 100);
-   Browse      := Ada_GUI.New_Button (Text => "Browse");
-   Add         := Ada_GUI.New_Button (Text => "Add");
-   Play        := Ada_GUI.New_Button (Text => "Play", Break_Before => True);
-   Skip        := Ada_GUI.New_Button (Text => "Skip");
-   Quit        := Ada_GUI.New_Button (Text => "Quit");
-   Quit_After  := Ada_GUI.New_Check_Box (Label => "Quit after this song");
-   Pause_After := Ada_GUI.New_Check_Box (Label => "Pause after this song");
-
+   Player     := Ada_GUI.New_Audio_Player;
+   Sel        := Ada_GUI.New_Selection_List (Text => Text_List (List), Break_Before => True, Height => 30);
+   Count      := Ada_GUI.New_Text_Box (Text => List.Length'Image, Label => "Number of songs:", Break_Before => True);
+   Delete     := Ada_GUI.New_Button (Text => "Delete", Break_Before => True);
+   Path       := Ada_GUI.New_Text_Box (Width => 100);
+   Browse     := Ada_GUI.New_Button (Text => "Browse");
+   Add        := Ada_GUI.New_Button (Text => "Add");
+   Play       := Ada_GUI.New_Button (Text => "Play", Break_Before => True);
+   Skip       := Ada_GUI.New_Button (Text => "Skip");
+   Quit       := Ada_GUI.New_Button (Text => "Quit");
+   After_Song := Ada_GUI.New_Check_Box (Label => "After this song:");
+   PQ_Song    := Ada_GUI.New_Radio_Buttons (Label => Pause_Quit, Orientation => Ada_GUI.Horizontal);
+   Space      := Ada_GUI.New_Background_Text (Text => NBSP & '|' & NBSP);
+   After_Time := Ada_GUI.New_Check_Box (Label => "After" & NBSP);
+   Hour_Sel   := Ada_GUI.New_Selection_List (Text => Hour_Text, Height => 1);
+   Hour_Sel.Set_Selected (Index => 1);
+   Min_Sel := Ada_GUI.New_Selection_List (Text => Min_Text, Height => 1);
+   Min_Sel.Set_Selected (Index => 1);
+   PQ_Time := Ada_GUI.New_Radio_Buttons (Label => Pause_Quit, Orientation => Ada_GUI.Horizontal);
    Refresh;
 
    -- Now we're ready to go
@@ -349,9 +402,20 @@ begin -- MP
          Sel.Set_Selected (Index => Current.Position);
 
          if Start (To_String (Current.Path) ) then
-            if Pause_After.Active then
+            Pause_Song := After_Song.Active and PQ_Song.Active (1);
+            Pause_Time := After_Time.Active and Passed and PQ_Time.Active (1);
+
+            if Pause_Song or Pause_Time then
                Player.Pause;
-               Pause_After.Set_Active (Active => False);
+               Player.Set_Position (Position => 0.0);
+
+               if Pause_Song then
+                  After_Song.Set_Active (Active => False);
+               end if;
+
+               if Pause_Time then
+                  After_Time.Set_Active (Active => False);
+               end if;
             end if;
 
             Wait_For_End : loop
@@ -393,7 +457,8 @@ begin -- MP
             Current.Path := Null_Bounded_String;
          end if;
 
-         exit All_Cycles when Quit_After.Active;
+         exit All_Cycles when (After_Song.Active and PQ_Song.Active (2) ) or
+                              (After_Time.Active and Passed and PQ_Time.Active (2) );
 
          Index := Index + 1;
 
@@ -405,7 +470,9 @@ begin -- MP
 
    Quit_Now;
 exception -- MP
-when others =>
+when E : others =>
+   Ada_GUI.Log (Message => "MP " & Ada.Exceptions.Exception_Information (E) );
+
    if Ada_GUI.Set_Up then
       Quit_Now;
    end if;

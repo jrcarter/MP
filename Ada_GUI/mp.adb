@@ -349,7 +349,7 @@ procedure MP is
    use type Ada_GUI.Event_Kind_ID;
    use type Ada_GUI.Widget_ID;
 begin -- MP
-   Ada_GUI.Set_Up (Title => Title, ID => 8089);
+   Ada_GUI.Set_Up (Title => Title);
    Player     := Ada_GUI.New_Audio_Player;
    Sel        := Ada_GUI.New_Selection_List (Text => Text_List (List), Break_Before => True, Height => 30);
    Count      := Ada_GUI.New_Text_Box (Text => List.Length'Image, Label => "Number of songs:", Break_Before => True);

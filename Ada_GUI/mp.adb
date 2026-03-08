@@ -148,7 +148,7 @@ procedure MP is
    end Make_Song_List;
 
    procedure Shuffle (List : in out Song_Lists.Vector) is
-      function Random is New PragmARC.Randomness.U32_Ranges
+      function Random is new PragmARC.Randomness.U32_Ranges
          (Generator => PragmARC.Randomness.Threefry.Generator, Random => PragmARC.Randomness.Threefry.Random);
 
       subtype U32 is Interfaces.Unsigned_32;
@@ -206,6 +206,7 @@ procedure MP is
       Sel.Set_Selected (Index => Before);
       Path.Set_Text (Text => "");
       Make_Song_List (List => Song);
+      Count.Set_Text (Text => Integer'Image (List.Length) );
    exception -- Add_Song
    when Error : others =>
       Ada_GUI.Log (Message => "Add_Song " & Ada.Exceptions.Exception_Information (Error) );
@@ -248,6 +249,7 @@ procedure MP is
       List.Delete (Item => To_Bounded_String (Sel.Text) );
       Sel.Delete (Index => Pos);
       Make_Song_List (List => Song);
+      Count.Set_Text (Text => Integer'Image (List.Length) );
    exception -- Delete_Song
    when Error : others =>
       Ada_GUI.Log (Message => "Delete_Song " & Ada.Exceptions.Exception_Information (Error) );
@@ -275,14 +277,37 @@ procedure MP is
       Ada_GUI.Log (Message => "Refresh " & Ada.Exceptions.Exception_Information (Error) );
    end Refresh;
 
+   function Passed return Boolean is
+      Now  : constant Duration := Ada.Calendar.Seconds (Ada.Calendar.Clock);
+      Want : constant Duration := (Hour_Sel.Selected - 1) * 3600.0 + (Min_Sel.Selected - 1) * 60.0;
+   begin -- Passed
+      return Now >= Want;
+   end Passed;
+
    function Start (Song : in String) return Boolean is
-      -- Empty
+      Pause_Song : Boolean;
+      Pause_Time : Boolean;
    begin -- Start
       Player.Set_Source (Source => Song);
       Ada_GUI.Set_Title (Title => Title & ' ' & Song);
 
       Wait_For_Ready : for I in 1 .. 10 loop
          if Player.Ready then
+            Pause_Song := After_Song.Active and PQ_Song.Active (1);
+            Pause_Time := After_Time.Active and Passed and PQ_Time.Active (1);
+
+            if Pause_Song or Pause_Time then
+               if Pause_Song then
+                  After_Song.Set_Active (Active => False);
+               end if;
+
+               if Pause_Time then
+                  After_Time.Set_Active (Active => False);
+               end if;
+
+               return True;
+            end if;
+
             Player.Play;
 
             return True;
@@ -317,13 +342,6 @@ procedure MP is
       return Result;
    end Text_List;
 
-   function Passed return Boolean is
-      Now  : constant Duration := Ada.Calendar.Seconds (Ada.Calendar.Clock);
-      Want : constant Duration := (Hour_Sel.Selected - 1) * 3600.0 + (Min_Sel.Selected - 1) * 60.0;
-   begin -- Passed
-      return Now >= Want;
-   end Passed;
-
    function To_US (Value : in String) return Ada.Strings.Unbounded.Unbounded_String renames
       Ada.Strings.Unbounded.To_Unbounded_String;
 
@@ -345,9 +363,6 @@ procedure MP is
        To_US ("48"), To_US ("49"), To_US ("50"), To_US ("51"), To_US ("52"), To_US ("53"),
        To_US ("54"), To_US ("55"), To_US ("56"), To_US ("57"), To_US ("58"), To_US ("59") );
    NBSP : constant String := "&nbsp;";
-
-   Pause_Song : Boolean;
-   Pause_Time : Boolean;
 
    use type Ada_GUI.Event_Kind_ID;
    use type Ada_GUI.Widget_ID;
@@ -405,22 +420,6 @@ begin -- MP
          Sel.Set_Selected (Index => Current.Position);
 
          if Start (To_String (Current.Path) ) then
-            Pause_Song := After_Song.Active and PQ_Song.Active (1);
-            Pause_Time := After_Time.Active and Passed and PQ_Time.Active (1);
-
-            if Pause_Song or Pause_Time then
-               Player.Pause;
-               Player.Set_Position (Position => 0.0);
-
-               if Pause_Song then
-                  After_Song.Set_Active (Active => False);
-               end if;
-
-               if Pause_Time then
-                  After_Time.Set_Active (Active => False);
-               end if;
-            end if;
-
             Wait_For_End : loop
                Event := Ada_GUI.Next_Event (Timeout => 0.1);
 
